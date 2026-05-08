@@ -1,4 +1,4 @@
-// OSESG-GL GEOINT Dashboard — Leaflet map + sidebar wiring
+// OSESG-GL GEOINT Dashboard — Leaflet map + sidebar wiring + live overlay
 
 const map = L.map("map", {
   center: MAP_VIEW.center,
@@ -19,10 +19,13 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
 
-// Frame the Great Lakes region nicely on first load.
 map.fitBounds(MAP_VIEW.bounds, { padding: [20, 20] });
 
-// ---- Markers --------------------------------------------------------------
+// Layer groups so we can toggle live overlay on/off in the legend.
+const curatedLayer = L.layerGroup().addTo(map);
+const liveLayer = L.layerGroup().addTo(map);
+
+// ---- Curated pins (5 user-supplied posts) --------------------------------
 
 const markers = {};
 
@@ -54,16 +57,13 @@ function buildPopup(incident) {
 }
 
 INCIDENTS.forEach((inc) => {
-  const marker = L.marker([inc.lat, inc.lon], { icon: makePinIcon(inc.id) }).addTo(map);
+  const marker = L.marker([inc.lat, inc.lon], { icon: makePinIcon(inc.id) }).addTo(curatedLayer);
   marker.bindPopup(buildPopup(inc), { maxWidth: 320 });
   marker.on("click", () => setActiveCard(inc.id));
   markers[inc.id] = marker;
 });
 
-// ---- Sidebar --------------------------------------------------------------
-
 const listEl = document.getElementById("incident-list");
-
 INCIDENTS.forEach((inc) => {
   const card = document.createElement("div");
   card.className = "card";
@@ -100,10 +100,83 @@ function setActiveCard(id) {
   });
 }
 
+// ---- Live GeoConfirmed overlay -------------------------------------------
+
+const liveStatusEl = document.getElementById("live-status");
+const liveCountEl = document.getElementById("live-count");
+const liveToggleEl = document.getElementById("live-toggle");
+
+function setLiveStatus(text, kind = "info") {
+  liveStatusEl.textContent = text;
+  liveStatusEl.dataset.kind = kind;
+}
+
+function buildLivePopup(p) {
+  const coords = `${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°`;
+  const desc = p.description ? truncate(p.description, 280) : "(no description)";
+  const dateLine = p.date ? `<p class="popup-meta">Date: <span>${escapeHtml(p.date)}</span></p>` : "";
+  const linkLine = p.sourceUrl
+    ? `<a class="popup-link" href="${p.sourceUrl}" target="_blank" rel="noopener noreferrer">View source ↗</a>`
+    : `<span class="popup-meta">No source URL in record</span>`;
+  return `
+    <h3 class="popup-title">${escapeHtml(p.name || "GeoConfirmed placemark")}</h3>
+    <p class="popup-coords">${coords}</p>
+    <p class="popup-summary">${escapeHtml(desc)}</p>
+    ${dateLine}
+    ${linkLine}
+  `;
+}
+
+function liveMarkerStyle() {
+  return {
+    radius: 5,
+    color: "#4ea1ff",
+    weight: 1.5,
+    fillColor: "#4ea1ff",
+    fillOpacity: 0.55
+  };
+}
+
+async function loadLiveOverlay() {
+  setLiveStatus("Loading live GeoConfirmed data…", "loading");
+  try {
+    const { conflict, items } = await GeoConfirmed.loadGreatLakesPlacemarks();
+    if (!conflict) {
+      setLiveStatus("No Africa conflict found in API", "error");
+      return;
+    }
+    items.forEach((p) => {
+      const m = L.circleMarker([p.lat, p.lon], liveMarkerStyle());
+      m.bindPopup(buildLivePopup(p), { maxWidth: 340 });
+      m.addTo(liveLayer);
+    });
+    liveCountEl.textContent = String(items.length);
+    setLiveStatus(
+      `Live · ${items.length} placemarks in Great Lakes bbox · conflict "${conflict.shortName || conflict.name}"`,
+      "ok"
+    );
+  } catch (err) {
+    console.error(err);
+    setLiveStatus(`Live fetch failed: ${err.message}`, "error");
+  }
+}
+
+liveToggleEl.addEventListener("change", (e) => {
+  if (e.target.checked) map.addLayer(liveLayer);
+  else map.removeLayer(liveLayer);
+});
+
+loadLiveOverlay();
+
 // ---- utils ----------------------------------------------------------------
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[c]));
+}
+
+function truncate(s, n) {
+  s = String(s);
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }

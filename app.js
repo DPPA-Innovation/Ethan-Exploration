@@ -1,196 +1,187 @@
-// OSESG-GL GEOINT Dashboard — Leaflet map + sidebar wiring + live overlay
+// OSESG-GL GEOINT Dashboard — Leaflet wiring + UI state
+// =====================================================================
 
-const map = L.map("map", {
-  center: MAP_VIEW.center,
-  zoom: MAP_VIEW.zoom,
-  minZoom: 4,
-  maxZoom: 14,
-  zoomControl: true,
-  worldCopyJump: true
-});
+(function () {
+  const curated = window.CURATED_INCIDENTS || [];
+  const aoBbox = window.GREAT_LAKES_BBOX;
 
-// Standard OpenStreetMap tiles. Replit / any normal server has full network
-// access, so these will load without issue. If OSESG-GL prefers a more
-// "intelligence-style" basemap, swap the URL for CARTO Dark Matter:
-//   https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution:
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-}).addTo(map);
+  // ---------------- map ----------------------------------------------
 
-map.fitBounds(MAP_VIEW.bounds, { padding: [20, 20] });
+  const map = L.map("map", {
+    minZoom: 4, maxZoom: 14, zoomControl: true, worldCopyJump: false
+  }).setView([-2.0, 28.5], 6);
 
-// Layer groups so we can toggle live overlay on/off in the legend.
-const curatedLayer = L.layerGroup().addTo(map);
-const liveLayer = L.layerGroup().addTo(map);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
 
-// ---- Curated pins (5 user-supplied posts) --------------------------------
+  const curatedLayer = L.layerGroup().addTo(map);
+  const liveLayer = L.layerGroup().addTo(map);
 
-const markers = {};
+  // ---------------- DOM refs -----------------------------------------
 
-function makePinIcon(num) {
-  return L.divIcon({
-    className: "geoint-pin-wrap",
-    html: `<div class="geoint-pin"><span>${num}</span></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32]
-  });
-}
+  const cCurated = document.getElementById("c-curated");
+  const cLive    = document.getElementById("c-live");
+  const cTotal   = document.getElementById("c-total");
+  const statusPill = document.getElementById("status-pill");
+  const statusText = document.getElementById("status-text");
+  const listEl   = document.getElementById("incident-list");
+  const tCurated = document.getElementById("toggle-curated");
+  const tLive    = document.getElementById("toggle-live");
 
-function buildPopup(incident) {
-  const coords = `${incident.lat.toFixed(4)}°, ${incident.lon.toFixed(4)}°`;
-  return `
-    <h3 class="popup-title">#${incident.id} · ${escapeHtml(incident.location)}</h3>
-    <p class="popup-coords">${coords}</p>
-    <p class="popup-summary">${escapeHtml(incident.summary)}</p>
-    <p class="popup-meta">
-      Date: <span>${escapeHtml(incident.date)}</span><br/>
-      Type: <span>${escapeHtml(incident.incidentType)}</span><br/>
-      Confidence: <span>${escapeHtml(incident.confidence)}</span>
-    </p>
-    <a class="popup-link" href="${incident.sourceUrl}" target="_blank" rel="noopener noreferrer">
-      View original X post &nbsp;↗
-    </a>
-  `;
-}
-
-INCIDENTS.forEach((inc) => {
-  const marker = L.marker([inc.lat, inc.lon], { icon: makePinIcon(inc.id) }).addTo(curatedLayer);
-  marker.bindPopup(buildPopup(inc), { maxWidth: 320 });
-  marker.on("click", () => setActiveCard(inc.id));
-  markers[inc.id] = marker;
-});
-
-const listEl = document.getElementById("incident-list");
-INCIDENTS.forEach((inc) => {
-  const card = document.createElement("div");
-  card.className = "card";
-  card.dataset.id = inc.id;
-  card.innerHTML = `
-    <div class="row1">
-      <div class="num">${inc.id}</div>
-      <div>
-        <div class="loc">${escapeHtml(inc.location)}</div>
-        <div class="meta">${escapeHtml(inc.date)} · ${inc.lat.toFixed(3)}, ${inc.lon.toFixed(3)}</div>
-      </div>
-    </div>
-    <div class="summary">${escapeHtml(inc.summary)}</div>
-    <div class="tags">
-      <span class="tag">${escapeHtml(inc.incidentType)}</span>
-      <span class="tag warn">${escapeHtml(inc.confidence)}</span>
-    </div>
-  `;
-  card.addEventListener("click", () => focusIncident(inc.id));
-  listEl.appendChild(card);
-});
-
-function focusIncident(id) {
-  const inc = INCIDENTS.find((i) => i.id === id);
-  if (!inc) return;
-  setActiveCard(id);
-  map.flyTo([inc.lat, inc.lon], 9, { duration: 0.8 });
-  setTimeout(() => markers[id].openPopup(), 600);
-  if (history.replaceState) {
-    history.replaceState(null, "", `#incident=${id}`);
+  function setStatus(state, text) {
+    statusPill.dataset.state = state;
+    statusText.textContent = text;
   }
-}
 
-function setActiveCard(id) {
-  document.querySelectorAll(".card").forEach((c) => {
-    c.classList.toggle("active", Number(c.dataset.id) === id);
-  });
-}
+  // ---------------- pin factories ------------------------------------
 
-// Deep-link support: opening the dashboard with #incident=N auto-focuses
-// that pin. Useful for citing specific incidents in OSESG-GL cables.
-function focusFromHash() {
-  const m = /#incident=(\d+)/.exec(location.hash);
-  if (!m) return;
-  const id = Number(m[1]);
-  if (INCIDENTS.some((i) => i.id === id)) focusIncident(id);
-}
-window.addEventListener("hashchange", focusFromHash);
-focusFromHash();
-
-// ---- Live GeoConfirmed overlay -------------------------------------------
-
-const liveStatusEl = document.getElementById("live-status");
-const liveCountEl = document.getElementById("live-count");
-const liveToggleEl = document.getElementById("live-toggle");
-
-function setLiveStatus(text, kind = "info") {
-  liveStatusEl.textContent = text;
-  liveStatusEl.dataset.kind = kind;
-}
-
-function buildLivePopup(p) {
-  const coords = `${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°`;
-  const desc = p.description ? truncate(p.description, 280) : "(no description)";
-  const dateLine = p.date ? `<p class="popup-meta">Date: <span>${escapeHtml(p.date)}</span></p>` : "";
-  const linkLine = p.sourceUrl
-    ? `<a class="popup-link" href="${p.sourceUrl}" target="_blank" rel="noopener noreferrer">View source ↗</a>`
-    : `<span class="popup-meta">No source URL in record</span>`;
-  return `
-    <h3 class="popup-title">${escapeHtml(p.name || "GeoConfirmed placemark")}</h3>
-    <p class="popup-coords">${coords}</p>
-    <p class="popup-summary">${escapeHtml(desc)}</p>
-    ${dateLine}
-    ${linkLine}
-  `;
-}
-
-function liveMarkerStyle() {
-  return {
-    radius: 5,
-    color: "#4ea1ff",
-    weight: 1.5,
-    fillColor: "#4ea1ff",
-    fillOpacity: 0.55
-  };
-}
-
-async function loadLiveOverlay() {
-  setLiveStatus("Loading live GeoConfirmed data…", "loading");
-  try {
-    const { conflict, items } = await GeoConfirmed.loadGreatLakesPlacemarks();
-    if (!conflict) {
-      setLiveStatus("No Africa conflict found in API", "error");
-      return;
-    }
-    items.forEach((p) => {
-      const m = L.circleMarker([p.lat, p.lon], liveMarkerStyle());
-      m.bindPopup(buildLivePopup(p), { maxWidth: 340 });
-      m.addTo(liveLayer);
+  function curatedIcon() {
+    return L.divIcon({
+      className: "pin-curated-wrap",
+      html: '<div class="pin-curated"></div>',
+      iconSize: [18, 18], iconAnchor: [9, 9], popupAnchor: [0, -10]
     });
-    liveCountEl.textContent = String(items.length);
-    setLiveStatus(
-      `Live · ${items.length} placemarks in Great Lakes bbox · conflict "${conflict.shortName || conflict.name}"`,
-      "ok"
-    );
-  } catch (err) {
-    console.error(err);
-    setLiveStatus(`Live fetch failed: ${err.message}`, "error");
   }
-}
+  function liveIcon() {
+    return L.divIcon({
+      className: "pin-live-wrap",
+      html: '<div class="pin-live"></div>',
+      iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -8]
+    });
+  }
 
-liveToggleEl.addEventListener("change", (e) => {
-  if (e.target.checked) map.addLayer(liveLayer);
-  else map.removeLayer(liveLayer);
-});
+  // ---------------- popup builder ------------------------------------
 
-loadLiveOverlay();
+  function badge(label, kind) { return `<span class="pop-badge ${kind}">${label}</span>`; }
 
-// ---- utils ----------------------------------------------------------------
+  function buildPopup(item, kind /* "curated" | "live" */) {
+    const coords = `${item.lat.toFixed(4)}°, ${item.lon.toFixed(4)}°`;
+    const verifiedLabel = item.verified ? "Verified" : "Unverified (placeholder)";
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[c]));
-}
+    const badges =
+      badge("GEOINT", "geoint") +
+      badge(kind === "curated" ? "CURATED" : "LIVE", kind) +
+      badge("@GeoConfirmed", "geocon");
 
-function truncate(s, n) {
-  s = String(s);
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
-}
+    const meta = `
+      <dl class="pop-meta">
+        <dt>Date</dt><dd>${escapeHtml(item.date || "—")}</dd>
+        <dt>Type</dt><dd>${escapeHtml(item.incident_type || "—")}</dd>
+        <dt>Confidence</dt><dd>${escapeHtml(item.confidence || "—")}</dd>
+        <dt>Verified</dt><dd>${escapeHtml(verifiedLabel)}</dd>
+        <dt>Post ID</dt><dd>${escapeHtml(String(item.id || "—"))}</dd>
+      </dl>`;
+
+    const link = item.url
+      ? `<a class="pop-link" href="${item.url}" target="_blank" rel="noopener noreferrer">View original post on X &nbsp;↗</a>`
+      : `<span class="pop-meta">No source URL available</span>`;
+
+    return `
+      <div class="pop-badges">${badges}</div>
+      <h3 class="pop-title">${escapeHtml(item.location)}</h3>
+      <p class="pop-coords">${coords}</p>
+      <p class="pop-summary">${escapeHtml(truncate(item.summary || "", 320))}</p>
+      ${meta}
+      ${link}
+    `;
+  }
+
+  // ---------------- curated layer ------------------------------------
+
+  const curatedMarkers = {};
+
+  curated.forEach((inc, idx) => {
+    const m = L.marker([inc.lat, inc.lon], { icon: curatedIcon(), title: inc.location })
+      .addTo(curatedLayer);
+    m.bindPopup(buildPopup(inc, "curated"), { maxWidth: 340 });
+    m.on("click", () => setActiveCard(inc.id));
+    curatedMarkers[inc.id] = m;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.id = inc.id;
+    card.innerHTML = `
+      <div class="row1">
+        <div class="num">${idx + 1}</div>
+        <div>
+          <div class="loc">${escapeHtml(inc.location)}</div>
+          <div class="meta">${escapeHtml(inc.date || "")} · ${inc.lat.toFixed(3)}, ${inc.lon.toFixed(3)}</div>
+        </div>
+      </div>
+      <div class="summary">${escapeHtml(truncate(inc.summary, 200))}</div>
+      <div class="tags">
+        <span class="tag">${escapeHtml(inc.incident_type)}</span>
+        <span class="tag warn">${escapeHtml(inc.confidence)}</span>
+        ${inc.verified ? "" : '<span class="tag unverified">Unverified</span>'}
+      </div>`;
+    card.addEventListener("click", () => focusIncident(inc.id));
+    listEl.appendChild(card);
+  });
+
+  cCurated.textContent = String(curated.length);
+
+  // Auto-fit map to curated pins on load.
+  if (curated.length) {
+    const b = L.latLngBounds(curated.map((i) => [i.lat, i.lon]));
+    map.fitBounds(b, { padding: [60, 60], maxZoom: 8 });
+  }
+
+  function setActiveCard(id) {
+    document.querySelectorAll(".card").forEach((c) =>
+      c.classList.toggle("active", c.dataset.id === String(id)));
+  }
+
+  function focusIncident(id) {
+    const inc = curated.find((i) => i.id === id);
+    if (!inc) return;
+    setActiveCard(id);
+    map.flyTo([inc.lat, inc.lon], 9, { duration: 0.8 });
+    setTimeout(() => curatedMarkers[id]?.openPopup(), 600);
+  }
+
+  // ---------------- layer toggles ------------------------------------
+
+  tCurated.addEventListener("change", (e) => {
+    if (e.target.checked) map.addLayer(curatedLayer); else map.removeLayer(curatedLayer);
+  });
+  tLive.addEventListener("change", (e) => {
+    if (e.target.checked) map.addLayer(liveLayer); else map.removeLayer(liveLayer);
+  });
+
+  // ---------------- live overlay -------------------------------------
+
+  async function loadLive() {
+    setStatus("loading", "Fetching live GeoConfirmed feed…");
+    try {
+      const { source, conflict, total, items } = await window.GeoConfirmedAPI.fetchAll();
+      items.forEach((p) => {
+        const m = L.marker([p.lat, p.lon], { icon: liveIcon(), title: p.location })
+          .addTo(liveLayer);
+        m.bindPopup(buildPopup(p, "live"), { maxWidth: 340 });
+      });
+      cLive.textContent = String(items.length);
+      cTotal.textContent = String(curated.length + items.length);
+      setStatus("ok", `Live · ${items.length}/${total} in AoR · ${source} · "${conflict}"`);
+    } catch (err) {
+      console.error("[GeoConfirmed live] failed:", err);
+      cLive.textContent = "0";
+      cTotal.textContent = String(curated.length);
+      setStatus("error", "Live feed unavailable — see console");
+    }
+  }
+
+  loadLive();
+
+  // ---------------- utils --------------------------------------------
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function truncate(s, n) {
+    s = String(s ?? "");
+    return s.length > n ? s.slice(0, n - 1) + "…" : s;
+  }
+})();

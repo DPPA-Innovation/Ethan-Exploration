@@ -8,270 +8,266 @@
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin="" />
+      crossorigin="anonymous" />
 
 <style>
   :root {
-    --bg: #0d1b2a;
-    --panel: #14233a;
-    --panel-2: #1b2e4a;
-    --border: #2a3f5f;
-    --text: #e6edf6;
-    --muted: #8aa1bf;
-    --accent: #4ea1ff;
-    --warning: #f5b94a;
-    --danger: #ef4444;
+    --bg:           #0f1419;
+    --header-from:  #1a3a5c;
+    --header-to:    #0f4c75;
+    --header-edge:  #3282b8;
+    --un-badge:     #5499c7;
+    --side-bg:      #15202b;
+    --card-bg:      #1e2732;
+    --border:       #2f3336;
+    --text:         #e6edf6;
+    --muted:        #8aa1bf;
+    --accent:       #bbe1fa;
+    --curated:      #f5b942;
+    --live:         #6abf69;
+    --danger:       #c9302c;
+    --x-blue:       #1d9bf0;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
   body { display: flex; flex-direction: column; height: 100vh; }
+  a { color: var(--accent); }
 
-  header {
-    background: linear-gradient(180deg, #0d1b2a 0%, #14233a 100%);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 22px;
+  /* ---------- header ---------- */
+  header.app-header {
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--header-from) 0%, var(--header-to) 100%);
+    border-bottom: 1px solid var(--header-edge);
+    padding: 12px 22px;
     display: flex; align-items: center; gap: 16px;
-    flex-shrink: 0;
   }
-  header .crest {
-    width: 38px; height: 38px; border-radius: 50%;
-    background: var(--accent);
+  .un-badge {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--un-badge);
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700; color: #0d1b2a; font-size: 13px;
+    font-weight: 700; color: #0f1419; font-size: 13px; letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
   }
-  header h1 {
-    margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.2px;
-  }
-  header .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
-  header .spacer { flex: 1; }
-  header .stat {
-    font-size: 11px; color: var(--muted);
-    text-align: right; line-height: 1.4;
-  }
-  header .stat strong { color: var(--text); font-size: 14px; display: block; }
+  .titles h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.2px; }
+  .titles .sub { margin: 2px 0 0; font-size: 12px; color: var(--accent); opacity: 0.8; }
+  .header-spacer { flex: 1; }
 
+  .counters { display: flex; gap: 18px; align-items: center; }
+  .counter { text-align: right; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.7px; }
+  .counter strong { display: block; font-size: 18px; color: var(--text); font-weight: 600; letter-spacing: 0; }
+  .counter.curated strong { color: var(--curated); }
+  .counter.live strong { color: var(--live); }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1);
+    font-size: 11px; color: var(--accent);
+  }
+  .status-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #6c7a89;
+    box-shadow: 0 0 0 0 rgba(0,0,0,0);
+  }
+  .status-pill[data-state="loading"] .status-dot { background: var(--curated); animation: dotPulse 1.2s ease-in-out infinite; }
+  .status-pill[data-state="ok"]      .status-dot { background: var(--live); box-shadow: 0 0 6px rgba(106,191,105,0.7); }
+  .status-pill[data-state="error"]   .status-dot { background: var(--danger); box-shadow: 0 0 6px rgba(201,48,44,0.7); }
+  @keyframes dotPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.4); opacity: 0.5; }
+  }
+
+  /* ---------- POC banner ---------- */
   .banner {
-    background: rgba(245, 185, 74, 0.12);
-    border-bottom: 1px solid rgba(245, 185, 74, 0.4);
-    color: var(--warning);
-    font-size: 12px;
-    padding: 8px 22px;
     flex-shrink: 0;
+    background: rgba(245,185,66,0.10);
+    border-bottom: 1px solid rgba(245,185,66,0.4);
+    color: var(--curated);
+    padding: 8px 22px; font-size: 12px;
   }
-  .banner strong { color: #ffd277; }
+  .banner strong { color: #ffd277; letter-spacing: 0.4px; }
 
+  /* ---------- main layout ---------- */
   main { display: flex; flex: 1; min-height: 0; }
-
-  #map {
-    flex: 1;
-    background: #0a1422;
-  }
-
+  #map { flex: 1; background: #08111a; position: relative; }
   aside {
-    width: 360px;
-    background: var(--panel);
+    width: 360px; flex-shrink: 0;
+    background: var(--side-bg);
     border-left: 1px solid var(--border);
     display: flex; flex-direction: column;
-    flex-shrink: 0;
   }
-  aside .aside-header {
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
-    font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px;
-    color: var(--muted);
+
+  .layer-toggles { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .layer-toggles .heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+  .toggle-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 0; cursor: pointer; user-select: none;
+    font-size: 13px;
   }
-  aside .aside-header strong { color: var(--text); }
-  .incident-list { flex: 1; overflow-y: auto; padding: 10px; }
+  .toggle-row input { margin: 0; cursor: pointer; }
+  .swatch { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; flex-shrink: 0; }
+  .swatch.curated { background: var(--curated); }
+  .swatch.live    { background: var(--live); }
+
+  .incidents-header { padding: 12px 18px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+  .incident-list { flex: 1; overflow-y: auto; padding: 6px 12px 14px; }
+  .incident-list::-webkit-scrollbar { width: 8px; }
+  .incident-list::-webkit-scrollbar-track { background: var(--side-bg); }
+  .incident-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
   .card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    margin-bottom: 10px;
-    cursor: pointer;
-    transition: border-color 0.15s, transform 0.15s;
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;
+    cursor: pointer; transition: border-color 0.15s, transform 0.15s;
   }
-  .card:hover { border-color: var(--accent); transform: translateX(-2px); }
-  .card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-
+  .card:hover { border-color: var(--curated); transform: translateX(-2px); }
+  .card.active { border-color: var(--curated); box-shadow: 0 0 0 1px var(--curated); }
   .card .row1 { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
   .card .num {
-    width: 22px; height: 22px; border-radius: 50%;
-    background: var(--danger);
-    color: white; font-size: 11px; font-weight: 700;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--curated); color: #0f1419;
+    font-size: 11px; font-weight: 700;
     display: flex; align-items: center; justify-content: center;
   }
-  .card .loc { font-size: 13px; font-weight: 600; color: var(--text); }
+  .card .loc { font-size: 13px; font-weight: 600; }
   .card .meta { font-size: 11px; color: var(--muted); }
-  .card .summary { font-size: 12px; color: #c5d3e6; line-height: 1.45; margin: 4px 0 0; }
+  .card .summary { font-size: 12px; color: var(--accent); line-height: 1.45; margin: 4px 0 0; }
   .card .tags { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
   .tag {
     font-size: 10px; padding: 2px 8px; border-radius: 10px;
-    background: rgba(78, 161, 255, 0.15);
-    color: var(--accent);
-    border: 1px solid rgba(78, 161, 255, 0.3);
+    background: rgba(187,225,250,0.10); color: var(--accent);
+    border: 1px solid rgba(187,225,250,0.25);
   }
-  .tag.warn { background: rgba(245, 185, 74, 0.12); color: var(--warning); border-color: rgba(245, 185, 74, 0.35); }
+  .tag.warn  { background: rgba(245,185,66,0.12); color: var(--curated); border-color: rgba(245,185,66,0.35); }
+  .tag.unverified { background: rgba(201,48,44,0.12); color: #ff8a8a; border-color: rgba(201,48,44,0.35); }
 
-  /* Leaflet popup overrides */
+  /* ---------- pins ---------- */
+  .pin-curated, .pin-live {
+    position: relative;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.55);
+  }
+  .pin-curated { background: var(--curated); }
+  .pin-live    { background: var(--live); border-width: 2px; }
+
+  .pin-curated::after {
+    content: ""; position: absolute;
+    top: -3px; left: -3px;
+    width: 18px; height: 18px;
+    border: 3px solid var(--curated);
+    border-radius: 50%;
+    animation: ringPulse 2s ease-out infinite;
+  }
+  @keyframes ringPulse {
+    0%   { transform: scale(1);   opacity: 0.85; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+
+  /* ---------- popup ---------- */
   .leaflet-popup-content-wrapper {
-    background: var(--panel);
-    color: var(--text);
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    background: var(--card-bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
   }
-  .leaflet-popup-tip { background: var(--panel); border: 1px solid var(--border); }
-  .leaflet-popup-content { margin: 12px 14px; font-size: 13px; line-height: 1.5; min-width: 240px; }
-  .popup-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--text); }
-  .popup-coords { font-size: 11px; color: var(--muted); margin: 0 0 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .popup-summary { margin: 0 0 10px; color: #c5d3e6; }
-  .popup-meta { font-size: 11px; color: var(--muted); margin: 0 0 10px; }
-  .popup-meta span { color: var(--text); font-weight: 500; }
-  .popup-link {
-    display: inline-block; padding: 6px 12px;
-    background: var(--accent); color: #0d1b2a;
-    text-decoration: none; border-radius: 6px;
-    font-size: 12px; font-weight: 600;
-    transition: background 0.15s;
-  }
-  .popup-link:hover { background: #6cb3ff; }
+  .leaflet-popup-tip { background: var(--card-bg); border: 1px solid var(--border); }
+  .leaflet-popup-content { margin: 14px 16px; min-width: 260px; font-size: 13px; line-height: 1.5; }
 
-  /* Custom numbered marker */
-  .geoint-pin {
-    width: 32px; height: 32px;
-    background: var(--danger);
-    border: 2px solid white;
-    border-radius: 50% 50% 50% 0;
-    transform: rotate(-45deg);
-    display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  .pop-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .pop-badge {
+    font-size: 9.5px; padding: 2px 8px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
+    background: rgba(187,225,250,0.12); color: var(--accent);
+    border: 1px solid rgba(187,225,250,0.3);
   }
-  .geoint-pin span {
-    transform: rotate(45deg);
-    color: white; font-weight: 700; font-size: 13px;
-  }
-  .geoint-pin::after {
-    content: '';
-    position: absolute;
-    width: 44px; height: 44px;
-    border-radius: 50%;
-    background: rgba(239, 68, 68, 0.4);
-    top: -8px; left: -8px;
-    transform: rotate(45deg);
-    animation: pulse 2s infinite;
-    z-index: -1;
-  }
-  @keyframes pulse {
-    0% { transform: rotate(45deg) scale(0.8); opacity: 0.7; }
-    100% { transform: rotate(45deg) scale(1.6); opacity: 0; }
-  }
+  .pop-badge.geoint  { background: rgba(82,152,199,0.15); color: var(--un-badge); border-color: rgba(82,152,199,0.45); }
+  .pop-badge.curated { background: rgba(245,185,66,0.15); color: var(--curated); border-color: rgba(245,185,66,0.45); }
+  .pop-badge.live    { background: rgba(106,191,105,0.15); color: var(--live);    border-color: rgba(106,191,105,0.45); }
+  .pop-badge.geocon  { background: rgba(29,155,240,0.15); color: var(--x-blue);   border-color: rgba(29,155,240,0.45); }
 
-  /* Scrollbar */
-  .incident-list::-webkit-scrollbar { width: 8px; }
-  .incident-list::-webkit-scrollbar-track { background: var(--panel); }
-  .incident-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .pop-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .pop-coords { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0 0 8px; }
+  .pop-summary { margin: 0 0 10px; color: var(--accent); }
 
-  /* Legend overlay (top-left of map) */
-  #map { position: relative; }
-  .legend {
-    position: absolute;
-    top: 12px; left: 12px;
-    z-index: 500;
-    background: rgba(20, 35, 58, 0.92);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    color: var(--text);
-    font-size: 12px;
-    min-width: 220px;
-    backdrop-filter: blur(4px);
+  .pop-meta {
+    display: grid; grid-template-columns: max-content 1fr;
+    gap: 4px 10px; font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--border); padding-top: 8px; margin-bottom: 10px;
   }
-  .legend-row {
-    display: flex; align-items: center; gap: 8px;
-    margin-bottom: 6px;
-    cursor: default;
-  }
-  .legend-row input[type="checkbox"] { margin: 0; cursor: pointer; }
-  .legend-dot {
-    display: inline-block;
-    width: 12px; height: 12px;
-    border-radius: 50%;
-    border: 1.5px solid white;
-  }
-  .legend-curated { background: var(--danger); }
-  .legend-live { background: var(--accent); border-color: var(--accent); opacity: 0.85; }
-  .legend-status {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid var(--border);
-    font-size: 11px;
-    color: var(--muted);
-    line-height: 1.4;
-  }
-  .legend-status[data-kind="loading"] { color: var(--warning); }
-  .legend-status[data-kind="ok"]      { color: #7fd17f; }
-  .legend-status[data-kind="error"]   { color: #ff8a8a; }
+  .pop-meta dt { margin: 0; }
+  .pop-meta dd { margin: 0; color: var(--text); font-weight: 500; word-break: break-all; }
 
+  .pop-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 6px;
+    background: var(--x-blue); color: #fff;
+    text-decoration: none; font-size: 12px; font-weight: 600;
+  }
+  .pop-link:hover { background: #3aaef0; }
+
+  /* ---------- responsive ---------- */
   @media (max-width: 900px) {
     main { flex-direction: column; }
-    aside { width: 100%; height: 280px; border-left: none; border-top: 1px solid var(--border); }
+    aside { width: 100%; height: 320px; border-left: none; border-top: 1px solid var(--border); }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <div class="crest">UN</div>
-  <div>
+<header class="app-header">
+  <div class="un-badge">UN</div>
+  <div class="titles">
     <h1>OSESG-GL · Great Lakes GEOINT Dashboard</h1>
-    <div class="sub">Geospatial intelligence — proof of concept · GeoConfirmed source</div>
+    <div class="sub">Geospatial intelligence — proof of concept · @GeoConfirmed feed</div>
   </div>
-  <div class="spacer"></div>
-  <div class="stat">
-    <strong id="stat-count">5</strong>
-    curated &nbsp;·&nbsp;
-    <strong id="live-count">–</strong>
-    live
+  <div class="header-spacer"></div>
+
+  <div class="counters">
+    <div class="counter curated"><strong id="c-curated">0</strong>Curated</div>
+    <div class="counter live"><strong id="c-live">–</strong>Live</div>
+    <div class="counter"><strong id="c-total">–</strong>Total</div>
+  </div>
+
+  <div class="status-pill" id="status-pill" data-state="idle">
+    <span class="status-dot"></span>
+    <span class="status-text" id="status-text">Idle</span>
   </div>
 </header>
 
 <div class="banner">
   <strong>PROOF OF CONCEPT.</strong>
-  Coordinates below are placeholders representing known eastern DRC hotspots where GeoConfirmed reports concentrate.
-  See <code>data.js</code> to plug in verified coordinates from the source posts.
+  Curated coordinates are placeholders pegged to localities named in each source post and are flagged
+  <code>verified: false</code> in <code>data.js</code> until confirmed against the original X content.
+  Live placemarks come from the GeoConfirmed Africa feed and are filtered to the OSESG-GL bounding box.
 </div>
 
 <main>
-  <div id="map" role="application" aria-label="Map of the Great Lakes region with GEOINT incident pins">
-    <div class="legend">
-      <label class="legend-row">
-        <span class="legend-dot legend-curated"></span>
-        Curated incidents (5 supplied posts)
-      </label>
-      <label class="legend-row">
-        <input type="checkbox" id="live-toggle" checked />
-        <span class="legend-dot legend-live"></span>
-        Live GeoConfirmed (Africa)
-      </label>
-      <div class="legend-status" id="live-status" data-kind="loading">
-        Initialising…
-      </div>
-    </div>
-  </div>
+  <div id="map" role="application" aria-label="Map of the Great Lakes region with GEOINT incident pins"></div>
 
   <aside>
-    <div class="aside-header">
-      <strong>Incidents</strong> · click to focus on map
+    <div class="layer-toggles">
+      <div class="heading">Layers</div>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-curated" checked />
+        <span class="swatch curated"></span>
+        <span>Curated incidents (5 supplied posts)</span>
+      </label>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-live" checked />
+        <span class="swatch live"></span>
+        <span>Live GeoConfirmed (Africa)</span>
+      </label>
     </div>
+
+    <div class="incidents-header">Incidents · click to focus</div>
     <div class="incident-list" id="incident-list"></div>
   </aside>
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-        crossorigin=""></script>
+        crossorigin="anonymous"></script>
 <script src="data.js"></script>
 <script src="geoconfirmed.js"></script>
 <script src="app.js"></script>

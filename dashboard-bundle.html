@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OSESG-GL · Great Lakes GEOINT Dashboard</title>
+
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="anonymous" />
+
+<style>
+  :root {
+    --bg:           #0f1419;
+    --header-from:  #1a3a5c;
+    --header-to:    #0f4c75;
+    --header-edge:  #3282b8;
+    --un-badge:     #5499c7;
+    --side-bg:      #15202b;
+    --card-bg:      #1e2732;
+    --border:       #2f3336;
+    --text:         #e6edf6;
+    --muted:        #8aa1bf;
+    --accent:       #bbe1fa;
+    --curated:      #f5b942;
+    --live:         #6abf69;
+    --danger:       #c9302c;
+    --x-blue:       #1d9bf0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+  body { display: flex; flex-direction: column; height: 100vh; }
+  a { color: var(--accent); }
+
+  header.app-header {
+    flex-shrink: 0;
+    background: linear-gradient(180deg, var(--header-from) 0%, var(--header-to) 100%);
+    border-bottom: 1px solid var(--header-edge);
+    padding: 12px 22px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .un-badge {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--un-badge);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #0f1419; font-size: 13px; letter-spacing: 0.5px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  }
+  .titles h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: 0.2px; }
+  .titles .sub { margin: 2px 0 0; font-size: 12px; color: var(--accent); opacity: 0.8; }
+  .header-spacer { flex: 1; }
+
+  .counters { display: flex; gap: 18px; align-items: center; }
+  .counter { text-align: right; font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.7px; }
+  .counter strong { display: block; font-size: 18px; color: var(--text); font-weight: 600; letter-spacing: 0; }
+  .counter.curated strong { color: var(--curated); }
+  .counter.live strong { color: var(--live); }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1);
+    font-size: 11px; color: var(--accent);
+  }
+  .status-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: #6c7a89;
+  }
+  .status-pill[data-state="loading"] .status-dot { background: var(--curated); animation: dotPulse 1.2s ease-in-out infinite; }
+  .status-pill[data-state="ok"]      .status-dot { background: var(--live); box-shadow: 0 0 6px rgba(106,191,105,0.7); }
+  .status-pill[data-state="error"]   .status-dot { background: var(--danger); box-shadow: 0 0 6px rgba(201,48,44,0.7); }
+  @keyframes dotPulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.4); opacity: 0.5; }
+  }
+
+  .banner {
+    flex-shrink: 0;
+    background: rgba(245,185,66,0.10);
+    border-bottom: 1px solid rgba(245,185,66,0.4);
+    color: var(--curated);
+    padding: 8px 22px; font-size: 12px;
+  }
+  .banner strong { color: #ffd277; letter-spacing: 0.4px; }
+
+  main { display: flex; flex: 1; min-height: 0; }
+  #map { flex: 1; background: #08111a; position: relative; }
+  aside {
+    width: 360px; flex-shrink: 0;
+    background: var(--side-bg);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+
+  .layer-toggles { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .layer-toggles .heading { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+  .toggle-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 0; cursor: pointer; user-select: none;
+    font-size: 13px;
+  }
+  .toggle-row input { margin: 0; cursor: pointer; }
+  .swatch { width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; flex-shrink: 0; }
+  .swatch.curated { background: var(--curated); }
+  .swatch.live    { background: var(--live); }
+
+  .incidents-header { padding: 12px 18px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); }
+  .incident-list { flex: 1; overflow-y: auto; padding: 6px 12px 14px; }
+  .incident-list::-webkit-scrollbar { width: 8px; }
+  .incident-list::-webkit-scrollbar-track { background: var(--side-bg); }
+  .incident-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .card {
+    background: var(--card-bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;
+    cursor: pointer; transition: border-color 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: var(--curated); transform: translateX(-2px); }
+  .card.active { border-color: var(--curated); box-shadow: 0 0 0 1px var(--curated); }
+  .card .row1 { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .card .num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--curated); color: #0f1419;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .card .loc { font-size: 13px; font-weight: 600; }
+  .card .meta { font-size: 11px; color: var(--muted); }
+  .card .summary { font-size: 12px; color: var(--accent); line-height: 1.45; margin: 4px 0 0; }
+  .card .tags { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(187,225,250,0.10); color: var(--accent);
+    border: 1px solid rgba(187,225,250,0.25);
+  }
+  .tag.warn  { background: rgba(245,185,66,0.12); color: var(--curated); border-color: rgba(245,185,66,0.35); }
+  .tag.unverified { background: rgba(201,48,44,0.12); color: #ff8a8a; border-color: rgba(201,48,44,0.35); }
+  .tag.verified   { background: rgba(106,191,105,0.15); color: var(--live); border-color: rgba(106,191,105,0.4); }
+
+  .pin-curated, .pin-live {
+    position: relative;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.55);
+  }
+  .pin-curated { background: var(--curated); }
+  .pin-live    { background: var(--live); border-width: 2px; }
+
+  .pin-curated::after {
+    content: ""; position: absolute;
+    top: -3px; left: -3px;
+    width: 18px; height: 18px;
+    border: 3px solid var(--curated);
+    border-radius: 50%;
+    animation: ringPulse 2s ease-out infinite;
+  }
+  @keyframes ringPulse {
+    0%   { transform: scale(1);   opacity: 0.85; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+
+  .leaflet-popup-content-wrapper {
+    background: var(--card-bg); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .leaflet-popup-tip { background: var(--card-bg); border: 1px solid var(--border); }
+  .leaflet-popup-content { margin: 14px 16px; min-width: 260px; font-size: 13px; line-height: 1.5; }
+
+  .pop-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .pop-badge {
+    font-size: 9.5px; padding: 2px 8px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
+    background: rgba(187,225,250,0.12); color: var(--accent);
+    border: 1px solid rgba(187,225,250,0.3);
+  }
+  .pop-badge.geoint  { background: rgba(82,152,199,0.15); color: var(--un-badge); border-color: rgba(82,152,199,0.45); }
+  .pop-badge.curated { background: rgba(245,185,66,0.15); color: var(--curated); border-color: rgba(245,185,66,0.45); }
+  .pop-badge.live    { background: rgba(106,191,105,0.15); color: var(--live);    border-color: rgba(106,191,105,0.45); }
+  .pop-badge.geocon  { background: rgba(29,155,240,0.15); color: var(--x-blue);   border-color: rgba(29,155,240,0.45); }
+
+  .pop-title { font-size: 14px; font-weight: 600; margin: 0 0 4px; }
+  .pop-coords { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0 0 8px; }
+  .pop-summary { margin: 0 0 10px; color: var(--accent); }
+
+  .pop-meta {
+    display: grid; grid-template-columns: max-content 1fr;
+    gap: 4px 10px; font-size: 11px; color: var(--muted);
+    border-top: 1px solid var(--border); padding-top: 8px; margin-bottom: 10px;
+  }
+  .pop-meta dt { margin: 0; }
+  .pop-meta dd { margin: 0; color: var(--text); font-weight: 500; word-break: break-all; }
+
+  .pop-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 6px;
+    background: var(--x-blue); color: #fff;
+    text-decoration: none; font-size: 12px; font-weight: 600;
+  }
+  .pop-link:hover { background: #3aaef0; }
+
+  @media (max-width: 900px) {
+    main { flex-direction: column; }
+    aside { width: 100%; height: 320px; border-left: none; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="un-badge">UN</div>
+  <div class="titles">
+    <h1>OSESG-GL · Great Lakes GEOINT Dashboard</h1>
+    <div class="sub">Geospatial intelligence — proof of concept · @GeoConfirmed feed</div>
+  </div>
+  <div class="header-spacer"></div>
+
+  <div class="counters">
+    <div class="counter curated"><strong id="c-curated">0</strong>Curated</div>
+    <div class="counter live"><strong id="c-live">–</strong>Live</div>
+    <div class="counter"><strong id="c-total">–</strong>Total</div>
+  </div>
+
+  <div class="status-pill" id="status-pill" data-state="idle">
+    <span class="status-dot"></span>
+    <span class="status-text" id="status-text">Idle</span>
+  </div>
+</header>
+
+<div class="banner">
+  <strong>PROOF OF CONCEPT.</strong>
+  Curated coordinates are placeholders pegged to localities named in each source post and are flagged
+  <code>verified: false</code> until confirmed against the original X content.
+  Live placemarks come from the GeoConfirmed Africa feed and are filtered to the OSESG-GL bounding box.
+  In a sandboxed preview the live fetch may be blocked — the curated layer still works and the status pill will turn red.
+</div>
+
+<main>
+  <div id="map" role="application" aria-label="Map of the Great Lakes region with GEOINT incident pins"></div>
+
+  <aside>
+    <div class="layer-toggles">
+      <div class="heading">Layers</div>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-curated" checked />
+        <span class="swatch curated"></span>
+        <span>Curated incidents (5 supplied posts)</span>
+      </label>
+      <label class="toggle-row">
+        <input type="checkbox" id="toggle-live" checked />
+        <span class="swatch live"></span>
+        <span>Live GeoConfirmed (Africa)</span>
+      </label>
+    </div>
+
+    <div class="incidents-header">Incidents · click to focus</div>
+    <div class="incident-list" id="incident-list"></div>
+  </aside>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin="anonymous"></script>
+
+<script>
+/* ============================================================
+ * data.js — curated incidents + AoR geometry
+ * ============================================================ */
+window.CURATED_INCIDENTS = [
+  {
+    id: "1912158685939253607",
+    location: "Goma, North Kivu, DRC",
+    lat: -1.6792, lon: 29.2228,
+    summary: "Geolocated incident in vicinity of Goma — eastern DRC conflict zone. Verified by @GeoConfirmed via visual analysis of imagery posted to X.",
+    date: "2025-04",
+    incident_type: "Armed clash / movement",
+    confidence: "Verified",
+    verified: false,
+    url: "https://x.com/GeoConfirmed/status/1912158685939253607"
+  },
+  {
+    id: "1884006386859926014",
+    location: "Bukavu, South Kivu, DRC",
+    lat: -2.5083, lon: 28.8608,
+    summary: "Geolocated event in South Kivu province. Verified by @GeoConfirmed using landmark and terrain analysis.",
+    date: "2025-01",
+    incident_type: "Cross-border activity",
+    confidence: "Verified",
+    verified: false,
+    url: "https://x.com/GeoConfirmed/status/1884006386859926014"
+  },
+  {
+    id: "1891050150786695183",
+    location: "Bunia, Ituri, DRC",
+    lat: 1.5667, lon: 30.2500,
+    summary: "Verified incident in Ituri province. @GeoConfirmed published geolocation breakdown with annotated satellite imagery.",
+    date: "2025-02",
+    incident_type: "Security incident",
+    confidence: "Verified",
+    verified: false,
+    url: "https://x.com/GeoConfirmed/status/1891050150786695183"
+  },
+  {
+    id: "2009738836952154354",
+    location: "Uvira, South Kivu, DRC",
+    lat: -3.4067, lon: 29.1442,
+    summary: "Geolocated to Uvira area near Burundi border. Visual content cross-referenced against known landmarks by @GeoConfirmed volunteers.",
+    date: "Recent",
+    incident_type: "Border / armed activity",
+    confidence: "Verified",
+    verified: false,
+    url: "https://x.com/GeoConfirmed/status/2009738836952154354"
+  },
+  {
+    id: "1885337583598669839",
+    location: "Rutshuru, North Kivu, DRC",
+    lat: -1.1869, lon: 29.4506,
+    summary: "Verified incident in Rutshuru territory, North Kivu. @GeoConfirmed analysis confirms location through terrain and infrastructure markers.",
+    date: "2025-01",
+    incident_type: "Armed clash",
+    confidence: "Verified",
+    verified: false,
+    url: "https://x.com/GeoConfirmed/status/1885337583598669839"
+  }
+];
+
+window.GREAT_LAKES_BBOX = {
+  minLon: 11.5, minLat: -18.5, maxLon: 42.0, maxLat: 5.5
+};
+
+window.AOR_COUNTRY_CODES = ["AO", "BI", "CD", "KE", "RW", "TZ", "UG"];
+
+/* ============================================================
+ * geoconfirmed.js — live API client (window.GeoConfirmedAPI)
+ * ============================================================ */
+(function () {
+  const DEFAULTS = {
+    baseUrl:       "https://geoconfirmed.org/api",
+    conflictPath:  "/Conflict",
+    placemarkPath: "/Placemark/v2",
+    kmzUrl:        "https://www.geoconfirmed.org/api/Export/Kmz/africa",
+    pageSize: 200,
+    maxPages: 25,
+    timeoutMs: 15000,
+    bbox: window.GREAT_LAKES_BBOX
+  };
+  const config = { ...DEFAULTS };
+
+  function timedFetch(url, init = {}) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), config.timeoutMs);
+    return fetch(url, { ...init, signal: ctrl.signal }).finally(() => clearTimeout(t));
+  }
+
+  const TRACKING_PARAMS = /^(utm_|t$|s$|si$|ref|ref_src|ref_url)/i;
+  function normalizeXUrl(raw) {
+    if (!raw) return null;
+    let u; try { u = new URL(raw.trim()); } catch { return null; }
+    if (/(^|\.)twitter\.com$/i.test(u.hostname)) u.hostname = "x.com";
+    if (!/(^|\.)x\.com$/i.test(u.hostname)) return null;
+    [...u.searchParams.keys()].forEach((k) => { if (TRACKING_PARAMS.test(k)) u.searchParams.delete(k); });
+    return u.toString();
+  }
+  function extractXUrl(...textFields) {
+    const blob = textFields.filter(Boolean).join(" \n ");
+    const m = blob.match(/https?:\/\/(?:www\.)?(?:x|twitter)\.com\/[^\s"'<>)]+/i);
+    return m ? normalizeXUrl(m[0]) : null;
+  }
+  function pickLatLon(p) {
+    const lat = Number(
+      p.la ?? p.lat ?? p.latitude ??
+      (Array.isArray(p.coordinates) && p.coordinates.length >= 2 ? p.coordinates[1] : null) ??
+      (p.geometry && Array.isArray(p.geometry.coordinates) ? p.geometry.coordinates[1] : null)
+    );
+    const lon = Number(
+      p.lo ?? p.lon ?? p.lng ?? p.longitude ??
+      (Array.isArray(p.coordinates) && p.coordinates.length >= 2 ? p.coordinates[0] : null) ??
+      (p.geometry && Array.isArray(p.geometry.coordinates) ? p.geometry.coordinates[0] : null)
+    );
+    return { lat, lon };
+  }
+  function stripHtml(s) { return String(s).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); }
+  function normalizePlacemark(p) {
+    const { lat, lon } = pickLatLon(p);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    const description = p.description || p.desc || "";
+    const xUrl = normalizeXUrl(p.url) || normalizeXUrl(p.sourceUrl) ||
+                 extractXUrl(p.originalSource, p.original_source, p.geolocation, description);
+    return {
+      id: String(p.id ?? p.placemarkId ?? p.guid ?? p.name ?? `${lat},${lon}`),
+      location: p.name || p.title || "GeoConfirmed placemark",
+      lat, lon,
+      summary: stripHtml(description),
+      date: p.date || p.dateCreated || p.created || "",
+      incident_type: p.category || p.tag || "GeoConfirmed report",
+      confidence: "Live feed",
+      verified: false,
+      url: xUrl,
+      _raw: p
+    };
+  }
+  function inBbox(item, bbox) {
+    return item.lat >= bbox.minLat && item.lat <= bbox.maxLat &&
+           item.lon >= bbox.minLon && item.lon <= bbox.maxLon;
+  }
+
+  async function fetchConflicts() {
+    const r = await timedFetch(config.baseUrl + config.conflictPath, { headers: { Accept: "application/json" } });
+    if (!r.ok) throw new Error(`Conflict list HTTP ${r.status}`);
+    return r.json();
+  }
+  function pickAfricaConflict(list) {
+    if (!Array.isArray(list)) return null;
+    const score = (c) => {
+      const s = ((c.shortName || "") + " " + (c.name || "")).toLowerCase();
+      if (s.includes("africa")) return 3;
+      if (s.includes("congo") || s.includes("drc")) return 2;
+      if (s.includes("sudan") || s.includes("ethiopia")) return 1;
+      return 0;
+    };
+    return list.map((c) => ({ c, s: score(c) })).filter((x) => x.s > 0)
+      .sort((a, b) => b.s - a.s).map((x) => x.c)[0] || null;
+  }
+  async function fetchPlacemarkPage(shortName, skip, take) {
+    const url = `${config.baseUrl}${config.placemarkPath}/${encodeURIComponent(shortName)}/${skip}/${take}`;
+    const r = await timedFetch(url, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: "{}"
+    });
+    if (!r.ok) throw new Error(`Placemark page HTTP ${r.status}`);
+    return r.json();
+  }
+  async function fetchAllJson() {
+    const conflicts = await fetchConflicts();
+    const conflict = pickAfricaConflict(conflicts);
+    if (!conflict) throw new Error("No Africa conflict in /Conflict response");
+    const shortName = conflict.shortName || conflict.name;
+    const items = [];
+    let skip = 0;
+    for (let page = 0; page < config.maxPages; page++) {
+      const data = await fetchPlacemarkPage(shortName, skip, config.pageSize);
+      const batch = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+      if (batch.length === 0) break;
+      for (const p of batch) { const n = normalizePlacemark(p); if (n) items.push(n); }
+      if (batch.length < config.pageSize) break;
+      skip += config.pageSize;
+    }
+    return { source: "json", conflict: shortName, items };
+  }
+
+  function loadJSZip() {
+    if (window.JSZip) return Promise.resolve(window.JSZip);
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+      s.crossOrigin = "anonymous"; s.referrerPolicy = "no-referrer";
+      s.onload = () => window.JSZip ? resolve(window.JSZip) : reject(new Error("JSZip load failed"));
+      s.onerror = () => reject(new Error("JSZip CDN unreachable"));
+      document.head.appendChild(s);
+    });
+  }
+  async function fetchAllKmz() {
+    const JSZip = await loadJSZip();
+    const r = await timedFetch(config.kmzUrl);
+    if (!r.ok) throw new Error(`KMZ HTTP ${r.status}`);
+    const buf = await r.arrayBuffer();
+    const zip = await JSZip.loadAsync(buf);
+    const kmlEntry = Object.values(zip.files).find((f) => /\.kml$/i.test(f.name)) || zip.file("doc.kml");
+    if (!kmlEntry) throw new Error("KMZ contained no .kml");
+    const kmlText = await kmlEntry.async("string");
+    const doc = new DOMParser().parseFromString(kmlText, "application/xml");
+    const placemarks = [...doc.getElementsByTagName("Placemark")];
+    const items = [];
+    for (const pm of placemarks) {
+      const coordsText = pm.getElementsByTagName("coordinates")[0]?.textContent?.trim();
+      if (!coordsText) continue;
+      const [lon, lat] = coordsText.split(/[\s,]+/).map(Number);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      const name = pm.getElementsByTagName("name")[0]?.textContent || "GeoConfirmed placemark";
+      const description = pm.getElementsByTagName("description")[0]?.textContent || "";
+      const n = normalizePlacemark({ name, description, la: lat, lo: lon });
+      if (n) items.push(n);
+    }
+    return { source: "kmz", conflict: "africa (kmz)", items };
+  }
+
+  async function fetchAll() {
+    const bbox = config.bbox || window.GREAT_LAKES_BBOX;
+    let result, primaryError;
+    try { result = await fetchAllJson(); }
+    catch (err) {
+      primaryError = err;
+      console.warn("[GeoConfirmedAPI] JSON path failed, falling back to KMZ:", err.message);
+      try { result = await fetchAllKmz(); }
+      catch (kmzErr) {
+        throw new Error(
+          `Both ingestion paths failed. JSON: ${primaryError?.message || "?"}. KMZ: ${kmzErr.message}. ` +
+          `If the browser console shows a CORS or sandbox error, this preview environment is blocking ` +
+          `cross-origin fetches. Run from GitHub Pages, Replit, or localhost instead.`
+        );
+      }
+    }
+    const filtered = result.items.filter((it) => inBbox(it, bbox));
+    return { source: result.source, conflict: result.conflict, total: result.items.length, items: filtered };
+  }
+
+  window.GeoConfirmedAPI = { config, fetchAll, _internal: { normalizePlacemark, normalizeXUrl, pickAfricaConflict, inBbox } };
+})();
+
+/* ============================================================
+ * app.js — Leaflet wiring + UI state
+ * ============================================================ */
+(function () {
+  const curated = window.CURATED_INCIDENTS || [];
+
+  const map = L.map("map", { minZoom: 4, maxZoom: 14, zoomControl: true, worldCopyJump: false }).setView([-2.0, 28.5], 6);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  const curatedLayer = L.layerGroup().addTo(map);
+  const liveLayer = L.layerGroup().addTo(map);
+
+  const cCurated = document.getElementById("c-curated");
+  const cLive    = document.getElementById("c-live");
+  const cTotal   = document.getElementById("c-total");
+  const statusPill = document.getElementById("status-pill");
+  const statusText = document.getElementById("status-text");
+  const listEl   = document.getElementById("incident-list");
+  const tCurated = document.getElementById("toggle-curated");
+  const tLive    = document.getElementById("toggle-live");
+
+  function setStatus(state, text) { statusPill.dataset.state = state; statusText.textContent = text; }
+  function curatedIcon() { return L.divIcon({ className: "pin-curated-wrap", html: '<div class="pin-curated"></div>', iconSize: [18,18], iconAnchor: [9,9], popupAnchor: [0,-10] }); }
+  function liveIcon()    { return L.divIcon({ className: "pin-live-wrap",    html: '<div class="pin-live"></div>',    iconSize: [14,14], iconAnchor: [7,7], popupAnchor: [0,-8] }); }
+
+  function badge(label, kind) { return `<span class="pop-badge ${kind}">${label}</span>`; }
+  function buildPopup(item, kind) {
+    const coords = `${item.lat.toFixed(4)}°, ${item.lon.toFixed(4)}°`;
+    const verifiedLabel = item.verified ? "Verified" : "Unverified (placeholder)";
+    const badges = badge("GEOINT","geoint") + badge(kind === "curated" ? "CURATED" : "LIVE", kind) + badge("@GeoConfirmed","geocon");
+    const meta = `
+      <dl class="pop-meta">
+        <dt>Date</dt><dd>${escapeHtml(item.date || "—")}</dd>
+        <dt>Type</dt><dd>${escapeHtml(item.incident_type || "—")}</dd>
+        <dt>Confidence</dt><dd>${escapeHtml(item.confidence || "—")}</dd>
+        <dt>Verified</dt><dd>${escapeHtml(verifiedLabel)}</dd>
+        <dt>Post ID</dt><dd>${escapeHtml(String(item.id || "—"))}</dd>
+      </dl>`;
+    const link = item.url
+      ? `<a class="pop-link" href="${item.url}" target="_blank" rel="noopener noreferrer">View original post on X &nbsp;↗</a>`
+      : `<span class="pop-meta">No source URL available</span>`;
+    return `
+      <div class="pop-badges">${badges}</div>
+      <h3 class="pop-title">${escapeHtml(item.location)}</h3>
+      <p class="pop-coords">${coords}</p>
+      <p class="pop-summary">${escapeHtml(truncate(item.summary || "", 320))}</p>
+      ${meta}
+      ${link}`;
+  }
+
+  const curatedMarkers = {};
+  curated.forEach((inc, idx) => {
+    const m = L.marker([inc.lat, inc.lon], { icon: curatedIcon(), title: inc.location }).addTo(curatedLayer);
+    m.bindPopup(buildPopup(inc, "curated"), { maxWidth: 340 });
+    m.on("click", () => setActiveCard(inc.id));
+    curatedMarkers[inc.id] = m;
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.id = inc.id;
+    card.innerHTML = `
+      <div class="row1">
+        <div class="num">${idx + 1}</div>
+        <div>
+          <div class="loc">${escapeHtml(inc.location)}</div>
+          <div class="meta">${escapeHtml(inc.date || "")} · ${inc.lat.toFixed(3)}, ${inc.lon.toFixed(3)}</div>
+        </div>
+      </div>
+      <div class="summary">${escapeHtml(truncate(inc.summary, 200))}</div>
+      <div class="tags">
+        <span class="tag">${escapeHtml(inc.incident_type)}</span>
+        <span class="tag warn">${escapeHtml(inc.confidence)}</span>
+        ${inc.verified ? "" : '<span class="tag unverified">Unverified</span>'}
+      </div>`;
+    card.addEventListener("click", () => focusIncident(inc.id));
+    listEl.appendChild(card);
+  });
+  cCurated.textContent = String(curated.length);
+
+  if (curated.length) {
+    const b = L.latLngBounds(curated.map((i) => [i.lat, i.lon]));
+    map.fitBounds(b, { padding: [60, 60], maxZoom: 8 });
+  }
+
+  function setActiveCard(id) {
+    document.querySelectorAll(".card").forEach((c) => c.classList.toggle("active", c.dataset.id === String(id)));
+  }
+  function focusIncident(id) {
+    const inc = curated.find((i) => i.id === id);
+    if (!inc) return;
+    setActiveCard(id);
+    map.flyTo([inc.lat, inc.lon], 9, { duration: 0.8 });
+    setTimeout(() => curatedMarkers[id]?.openPopup(), 600);
+  }
+
+  tCurated.addEventListener("change", (e) => { if (e.target.checked) map.addLayer(curatedLayer); else map.removeLayer(curatedLayer); });
+  tLive.addEventListener("change",    (e) => { if (e.target.checked) map.addLayer(liveLayer);    else map.removeLayer(liveLayer); });
+
+  function recordMatchesTweetId(p, tweetId) {
+    if (p.url && p.url.includes(tweetId)) return true;
+    if (p._raw) { try { return JSON.stringify(p._raw).includes(tweetId); } catch {} }
+    return false;
+  }
+  function verifyCuratedFromLive(liveItems) {
+    let verified = 0;
+    curated.forEach((inc) => {
+      if (inc.verified) return;
+      const tweetId = String(inc.id);
+      const match = liveItems.find((p) => recordMatchesTweetId(p, tweetId));
+      if (!match) return;
+      inc.lat = match.lat; inc.lon = match.lon; inc.verified = true;
+      const marker = curatedMarkers[inc.id];
+      if (marker) { marker.setLatLng([match.lat, match.lon]); marker.setPopupContent(buildPopup(inc, "curated")); }
+      const card = listEl.querySelector(`.card[data-id="${CSS.escape(tweetId)}"]`);
+      if (card) {
+        const meta = card.querySelector(".meta");
+        if (meta) meta.textContent = `${inc.date || ""} · ${inc.lat.toFixed(3)}, ${inc.lon.toFixed(3)}`;
+        card.querySelector(".tag.unverified")?.remove();
+        const tags = card.querySelector(".tags");
+        if (tags && !card.querySelector(".tag.verified")) {
+          const t = document.createElement("span");
+          t.className = "tag verified"; t.textContent = "✓ Verified from live feed";
+          tags.appendChild(t);
+        }
+      }
+      verified++;
+    });
+    if (verified > 0) {
+      const b = L.latLngBounds(curated.map((i) => [i.lat, i.lon]));
+      map.fitBounds(b, { padding: [60, 60], maxZoom: 8 });
+    }
+    return verified;
+  }
+
+  async function loadLive() {
+    setStatus("loading", "Fetching live GeoConfirmed feed…");
+    try {
+      const { source, conflict, total, items } = await window.GeoConfirmedAPI.fetchAll();
+      items.forEach((p) => {
+        const m = L.marker([p.lat, p.lon], { icon: liveIcon(), title: p.location }).addTo(liveLayer);
+        m.bindPopup(buildPopup(p, "live"), { maxWidth: 340 });
+      });
+      cLive.textContent = String(items.length);
+      cTotal.textContent = String(curated.length + items.length);
+      const verified = verifyCuratedFromLive(items);
+      const tail = verified > 0 ? ` · ${verified}/${curated.length} curated verified` : "";
+      setStatus("ok", `Live · ${items.length}/${total} in AoR · ${source} · "${conflict}"${tail}`);
+    } catch (err) {
+      console.error("[GeoConfirmed live] failed:", err);
+      cLive.textContent = "0";
+      cTotal.textContent = String(curated.length);
+      setStatus("error", "Live feed blocked by sandbox — curated layer still works");
+    }
+  }
+  loadLive();
+
+  function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+  function truncate(s, n) { s = String(s ?? ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+})();
+</script>
+
+</body>
+</html>

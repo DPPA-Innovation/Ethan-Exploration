@@ -152,6 +152,63 @@
 
   // ---------------- live overlay -------------------------------------
 
+  // Match a placemark against a curated tweet ID. Cheap path checks the
+  // normalised X URL; fallback stringifies the raw record so we still match
+  // when the URL got buried in description / originalSource / geolocation.
+  function recordMatchesTweetId(p, tweetId) {
+    if (p.url && p.url.includes(tweetId)) return true;
+    if (p._raw) {
+      try { return JSON.stringify(p._raw).includes(tweetId); } catch { /* fall through */ }
+    }
+    return false;
+  }
+
+  // After the live feed loads, snap each unverified curated pin to the
+  // matching live placemark's coordinates. The live feed is GeoConfirmed's
+  // own database — it carries the verified lat/lon from each post body — so
+  // matching by tweet ID effectively performs the "scrape the tweet" step
+  // without ever touching x.com.
+  function verifyCuratedFromLive(liveItems) {
+    let verified = 0;
+    curated.forEach((inc) => {
+      if (inc.verified) return;
+      const tweetId = String(inc.id);
+      const match = liveItems.find((p) => recordMatchesTweetId(p, tweetId));
+      if (!match) return;
+
+      inc.lat = match.lat;
+      inc.lon = match.lon;
+      inc.verified = true;
+
+      const marker = curatedMarkers[inc.id];
+      if (marker) {
+        marker.setLatLng([match.lat, match.lon]);
+        marker.setPopupContent(buildPopup(inc, "curated"));
+      }
+
+      const card = listEl.querySelector(`.card[data-id="${CSS.escape(tweetId)}"]`);
+      if (card) {
+        const meta = card.querySelector(".meta");
+        if (meta) meta.textContent = `${inc.date || ""} · ${inc.lat.toFixed(3)}, ${inc.lon.toFixed(3)}`;
+        card.querySelector(".tag.unverified")?.remove();
+        const tags = card.querySelector(".tags");
+        if (tags && !card.querySelector(".tag.verified")) {
+          const t = document.createElement("span");
+          t.className = "tag verified";
+          t.textContent = "✓ Verified from live feed";
+          tags.appendChild(t);
+        }
+      }
+      verified++;
+    });
+
+    if (verified > 0) {
+      const b = L.latLngBounds(curated.map((i) => [i.lat, i.lon]));
+      map.fitBounds(b, { padding: [60, 60], maxZoom: 8 });
+    }
+    return verified;
+  }
+
   async function loadLive() {
     setStatus("loading", "Fetching live GeoConfirmed feed…");
     try {
@@ -163,7 +220,12 @@
       });
       cLive.textContent = String(items.length);
       cTotal.textContent = String(curated.length + items.length);
-      setStatus("ok", `Live · ${items.length}/${total} in AoR · ${source} · "${conflict}"`);
+
+      const verified = verifyCuratedFromLive(items);
+      const tail = verified > 0
+        ? ` · ${verified}/${curated.length} curated verified`
+        : "";
+      setStatus("ok", `Live · ${items.length}/${total} in AoR · ${source} · "${conflict}"${tail}`);
     } catch (err) {
       console.error("[GeoConfirmed live] failed:", err);
       cLive.textContent = "0";

@@ -92,6 +92,9 @@ function focusIncident(id) {
   setActiveCard(id);
   map.flyTo([inc.lat, inc.lon], 9, { duration: 0.8 });
   setTimeout(() => markers[id].openPopup(), 600);
+  if (history.replaceState) {
+    history.replaceState(null, "", `#incident=${id}`);
+  }
 }
 
 function setActiveCard(id) {
@@ -99,6 +102,17 @@ function setActiveCard(id) {
     c.classList.toggle("active", Number(c.dataset.id) === id);
   });
 }
+
+// Deep-link support: opening the dashboard with #incident=N auto-focuses
+// that pin. Useful for citing specific incidents in OSESG-GL cables.
+function focusFromHash() {
+  const m = /#incident=(\d+)/.exec(location.hash);
+  if (!m) return;
+  const id = Number(m[1]);
+  if (INCIDENTS.some((i) => i.id === id)) focusIncident(id);
+}
+window.addEventListener("hashchange", focusFromHash);
+focusFromHash();
 
 // ---- Live GeoConfirmed overlay -------------------------------------------
 

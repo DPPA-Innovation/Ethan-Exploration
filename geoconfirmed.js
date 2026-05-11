@@ -21,6 +21,8 @@
 // =====================================================================
 
 (function () {
+  if (typeof window === "undefined") return;
+
   const DEFAULTS = {
     baseUrl:       "https://geoconfirmed.org/api",
     conflictPath:  "/Conflict",

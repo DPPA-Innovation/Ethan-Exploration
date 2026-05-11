@@ -2,6 +2,18 @@
 // =====================================================================
 
 (function () {
+  function init() {
+    if (typeof L === "undefined") {
+      console.error("Leaflet not loaded — check the <script> tag in index.html");
+      const mapEl = document.getElementById("map");
+      if (mapEl) {
+        mapEl.innerHTML =
+          '<div style="padding:40px;color:#ffd277;text-align:center;font-family:sans-serif;">' +
+          'Leaflet library failed to load. Check your network or CSP.</div>';
+      }
+      return;
+    }
+
   const curated = window.CURATED_INCIDENTS || [];
   const aoBbox = window.GREAT_LAKES_BBOX;
 
@@ -245,5 +257,12 @@
   function truncate(s, n) {
     s = String(s ?? "");
     return s.length > n ? s.slice(0, n - 1) + "…" : s;
+  }
+  } // end init()
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
   }
 })();

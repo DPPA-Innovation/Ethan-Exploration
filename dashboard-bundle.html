@@ -5,10 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>OSESG-GL · Great Lakes GEOINT Dashboard</title>
 
-<link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      crossorigin="anonymous" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
   :root {
@@ -260,10 +258,6 @@
   </aside>
 </main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-        crossorigin="anonymous"></script>
-
 <script>
 /* ============================================================
  * data.js — curated incidents + AoR geometry
@@ -336,6 +330,8 @@ window.AOR_COUNTRY_CODES = ["AO", "BI", "CD", "KE", "RW", "TZ", "UG"];
  * geoconfirmed.js — live API client (window.GeoConfirmedAPI)
  * ============================================================ */
 (function () {
+  if (typeof window === "undefined") return;
+
   const DEFAULTS = {
     baseUrl:       "https://geoconfirmed.org/api",
     conflictPath:  "/Conflict",
@@ -514,6 +510,18 @@ window.AOR_COUNTRY_CODES = ["AO", "BI", "CD", "KE", "RW", "TZ", "UG"];
  * app.js — Leaflet wiring + UI state
  * ============================================================ */
 (function () {
+  function init() {
+    if (typeof L === "undefined") {
+      console.error("Leaflet not loaded — check the <script> tag in index.html");
+      const mapEl = document.getElementById("map");
+      if (mapEl) {
+        mapEl.innerHTML =
+          '<div style="padding:40px;color:#ffd277;text-align:center;font-family:sans-serif;">' +
+          'Leaflet library failed to load. Check your network or CSP.</div>';
+      }
+      return;
+    }
+
   const curated = window.CURATED_INCIDENTS || [];
 
   const map = L.map("map", { minZoom: 4, maxZoom: 14, zoomControl: true, worldCopyJump: false }).setView([-2.0, 28.5], 6);
@@ -671,6 +679,13 @@ window.AOR_COUNTRY_CODES = ["AO", "BI", "CD", "KE", "RW", "TZ", "UG"];
 
   function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
   function truncate(s, n) { s = String(s ?? ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+  } // end init()
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
 })();
 </script>
 
